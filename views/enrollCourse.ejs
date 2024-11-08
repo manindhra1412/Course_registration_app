@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enroll in New Course</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h2>Enroll in a New Course</h2>
+
+        <!-- Available Courses for the current semester -->
+        <h4 class="mt-5">Available Courses for Semester <%= semester %>
+        </h4>
+        <ul class="list-group">
+            <% if (courses.length===0) { %>
+                <li class="list-group-item">No courses available for enrollment</li>
+                <% } else { %>
+                    <% courses.forEach(course=> { %>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <div>
+                                <strong>
+                                    <%= course.title %> | Teacher: <%= course.teacher.name %>
+                                </strong> - <%= course.code %> | Credits: <%= course.credits %>
+                            </div>
+                            <button class="btn btn-primary" onclick="addCourse('<%= course._id %>')">Enroll</button>
+                        </li>
+                        <% }) %>
+                            <% } %>
+        </ul>
+    </div>
+
+    <script>
+        async function addCourse(courseId) {
+            try {
+                const response = await fetch('/api/student/add-course', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseId })
+                });
+                if (response.ok) {
+                    alert('Course added successfully!');
+                    // Optionally, remove the enrolled course from the list without reloading the page
+                    document.getElementById(courseId).remove();
+                } else {
+                    alert('Failed to enroll in course');
+                }
+            } catch (error) {
+                console.error('Error enrolling in course:', error);
+            }
+        }
+    </script>
+</body>
+
+</html>
