@@ -15,6 +15,7 @@
 **/
 const cookieParser = require('cookie-parser');
 const express = require('express');
+const cron = require('node-cron');
 const app = express();
 const cors = require('cors');  // Import CORS
 const message = require('./utils');
@@ -51,23 +52,84 @@ app.get('/index', (req, res) => {
   res.render('index');
 });
 
+app.get('/teacher-dashboard', auth(['teacher']), async (req, res) => {
+  const courses = await Course.find({ teacher: req.user._id });
+  res.render('teacher', { courses });
+});
+
+app.get('/view-users', auth(['admin']), (req, res) => {
+  res.render('viewUsers');
+});
+
+app.get('/create-users', auth(['admin']), (req, res) => {
+  res.render('userCreation');
+});
+
 app.get('/main', auth(['student', 'teacher', 'admin']), (req, res) => {
   res.render('dashboard', { user: req.user });
+});
+// Scheduler for course closing
+cron.schedule('0 0 * * *', async () => {
+  try {
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+    // Update status to false for courses older than 10 days
+    await Course.updateMany(
+      { createdAt: { $lte: tenDaysAgo }, status: true },
+      { status: false }
+    );
+    console.log('Courses older than 10 days have been closed.');
+  } catch (error) {
+    console.error('Error updating course status:', error);
+  }
+});
+// Scheduler for semester
+cron.schedule('0 0 1 1,7 *', async () => {
+  try {
+    const students = await Student.find();
+
+    // Update each student's semester based on the current date
+    for (const student of students) {
+      const newSemester = student.calculateSemester();
+      if (student.semester !== newSemester) {
+        student.semester = newSemester;
+        await student.save();  // Save only if the semester has changed
+      }
+    }
+
+    console.log('Semester updated for all students');
+  } catch (error) {
+    console.error('Error updating student semesters:', error);
+  }
 });
 
 app.get('/enrolled-courses', auth(['student']), async (req, res) => {
   try {
+    // Fetch student and populate related courses
     const user = await Student.findOne({ user: req.user._id })
-      .populate({ path: 'acceptedCourses', populate: { path: 'teacher', select: 'name' }, strictPopulate: false })
-      .populate({ path: 'pendingCourses', populate: { path: 'teacher', select: 'name' }, strictPopulate: false });
-    const currentSemester = user.semester;
-    const previous_courses = user.acceptedCourses.map((e) => e.semester !== currentSemester);
+      .populate({
+        path: 'acceptedCourses',
+        populate: { path: 'teacher', select: 'name' },
+        strictPopulate: false
+      })
+      .populate({
+        path: 'pendingCourses',
+        populate: { path: 'teacher', select: 'name' },
+        strictPopulate: false
+      });
 
     // Check if user is found
     if (!user) {
       return res.status(404).send('Student not found');
     }
 
+    const currentSemester = user.semester;
+
+    // Filter out previous courses (where semester is less than the current semester)
+    const previous_courses = user.acceptedCourses.filter(course => course.semester < currentSemester);
+
+    // Render the view with the filtered previous courses and the populated pending and accepted courses
     res.render('viewCourse', {
       previous_courses,
       pendingCourses: user.pendingCourses,
@@ -79,27 +141,35 @@ app.get('/enrolled-courses', auth(['student']), async (req, res) => {
   }
 });
 
+
+// app.js or routes file
 app.get('/course-registration', auth(['student']), async (req, res) => {
   try {
     const user = await Student.findOne({ user: req.user._id })
       .populate({
         path: 'pendingCourses',
-        populate: { path: 'teacher', select: 'name' }, // Populate teacher's name in pending courses
+        populate: { path: 'teacher', select: 'name' }
       })
       .populate({
         path: 'acceptedCourses',
-        populate: { path: 'teacher', select: 'name' }, // Populate teacher's name in accepted courses
+        populate: { path: 'teacher', select: 'name' }
       });
 
     const semester = user.semester;
 
-    const allCourses = await Course.find({ semester, status: true })
-      .populate({ path: 'teacher', select: 'name' });  // Populate teacher's name in available courses
+    // Fetch only active courses for the current semester
+    const allCourses = await Course.find({ semester })
+      .populate({ path: 'teacher', select: 'name' });
 
-    const enrolledCourseIds = [...user.pendingCourses, ...user.acceptedCourses].map(course => course._id.toString());
+    // Get enrolled course IDs to exclude them from available courses
+    const enrolledCourseIds = [
+      ...user.pendingCourses.map(course => course._id.toString()),
+      ...user.acceptedCourses.map(course => course._id.toString())
+    ];
 
     const availableCourses = allCourses.filter(course => !enrolledCourseIds.includes(course._id.toString()));
 
+    // Render the enrollCourse view with the available courses
     res.render('enrollCourse', {
       user: req.user,
       semester,
@@ -109,17 +179,6 @@ app.get('/course-registration', auth(['student']), async (req, res) => {
     console.error('Error fetching courses:', error);
     res.status(500).send('Server error');
   }
-});
-
-
-
-app.get('/teacher-dashboard', auth(['teacher']), async (req, res) => {
-  const courses = await Course.find({ teacher: req.user._id });
-  res.render('teacher', { courses });
-});
-
-app.get('/admin-dashboard', auth(['admin']), (req, res) => {
-  res.render('admin', { user: req.user });
 });
 
 // Route to fetch students for a specific course

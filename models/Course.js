@@ -8,6 +8,6 @@ const courseSchema = new mongoose.Schema({
     credits: { type: Number, max: 8 },
     status: Boolean,
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('Course', courseSchema);

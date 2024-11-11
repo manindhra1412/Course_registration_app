@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enroll in New Course</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Styling for inactive courses */
+        .inactive-course {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 
 <body>
@@ -20,13 +27,21 @@
                 <li class="list-group-item">No courses available for enrollment</li>
                 <% } else { %>
                     <% courses.forEach(course=> { %>
-                        <li class="list-group-item d-flex justify-content-between">
+                        <!-- Conditional class for inactive courses -->
+                        <li
+                            class="list-group-item d-flex justify-content-between <%= course.status ? '' : 'inactive-course' %>">
                             <div>
                                 <strong>
                                     <%= course.title %> | Teacher: <%= course.teacher.name %>
                                 </strong> - <%= course.code %> | Credits: <%= course.credits %>
                             </div>
-                            <button class="btn btn-primary" onclick="addCourse('<%= course._id %>')">Enroll</button>
+                            <% if (course.status) { %>
+                                <!-- Enroll button for active courses -->
+                                <button class="btn btn-primary" onclick="addCourse('<%= course._id %>')">Enroll</button>
+                                <% } else { %>
+                                    <!-- Disabled button for inactive courses -->
+                                    <button class="btn btn-secondary" disabled>Inactive</button>
+                                    <% } %>
                         </li>
                         <% }) %>
                             <% } %>
